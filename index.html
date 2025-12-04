@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Sentinel: Orbital Defense System</title>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #00f2ff;
+            --warning-color: #ff9900;
+            --danger-color: #ff3333;
+            --bg-glass: rgba(10, 20, 30, 0.85);
+            --border-glass: 1px solid rgba(0, 242, 255, 0.2);
+        }
+
+        body, html {
+            width: 100%; height: 100%; margin: 0; overflow: hidden;
+            font-family: 'Rajdhani', sans-serif;
+            background: #000;
+        }
+
+        #cesiumContainer { width: 100%; height: 100%; }
+
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .panel {
+            background: var(--bg-glass);
+            border: var(--border-glass);
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            pointer-events: auto;
+            color: #fff;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            width: 300px;
+            max-height: calc(100% - 40px);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        h3 { margin: 0 0 10px 0; font-size: 14px; color: #88aaff; text-transform: uppercase; border-bottom: 1px solid #334455; padding-bottom: 5px; }
+
+        .asset-list { display: flex; flex-direction: column; gap: 5px; }
+        .asset-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-left: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .asset-item:hover { background: rgba(0,242,255,0.1); border-left-color: var(--primary-color); }
+        .asset-name { font-weight: 500; }
+        .asset-status { font-size: 10px; padding: 2px 5px; border-radius: 3px; background: #223344; }
+        .status-ok { color: #00ff66; }
+        .status-warn { color: var(--warning-color); animation: pulse 1s infinite; }
+
+        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+
+        .controls { display: flex; flex-direction: column; gap: 10px; }
+        .btn-toggle {
+            background: transparent;
+            border: 1px solid #445566;
+            color: #aaccff;
+            padding: 8px;
+            cursor: pointer;
+            text-align: left;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 500;
+        }
+        .btn-toggle:hover { border-color: var(--primary-color); color: #fff; }
+        .btn-toggle.active { background: rgba(0,242,255,0.2); border-color: var(--primary-color); }
+
+        #info-panel {
+            position: absolute;
+            bottom: 40px; right: 20px;
+            width: 350px;
+            min-height: 150px;
+            display: none;
+        }
+        .info-content { font-family: 'Roboto Mono', monospace; font-size: 12px; line-height: 1.5; }
+        
+        #clock-display { position: absolute; top: 20px; right: 20px; font-size: 20px; color: var(--primary-color); }
+
+        #loading {
+            position: absolute; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, #112, #000);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 9999;
+        }
+        
+        .loader-ring {
+            width: 120px; height: 120px;
+            border: 2px solid rgba(0, 242, 255, 0.1);
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 2s linear infinite;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
+        }
+        
+        .loader-ring::before {
+            content: ''; position: absolute;
+            top: 10px; left: 10px; right: 10px; bottom: 10px;
+            border: 2px solid rgba(0, 242, 255, 0.1);
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 3s linear infinite reverse;
+        }
+
+        .loader-core {
+            width: 60px; height: 60px;
+            background: radial-gradient(circle, var(--primary-color) 0%, transparent 70%);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            animation: pulse-core 1.5s ease-in-out infinite;
+            opacity: 0.8;
+        }
+        
+        .loading-text {
+            margin-top: 30px;
+            font-family: 'Roboto Mono', monospace;
+            color: var(--primary-color);
+            letter-spacing: 4px;
+            font-size: 14px;
+            animation: blink-text 1s infinite;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes pulse-core { 0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; } 50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.9; } 100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; } }
+        @keyframes blink-text { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+    </style>
+</head>
+
+<body>
+
+    <div id="loading">
+        <div class="loader-ring">
+            <div class="loader-core"></div>
+        </div>
+        <div class="loading-text">INITIALIZING SENTINEL SYSTEM</div>
+    </div>
+    <div id="cesiumContainer"></div>
+
+    <div id="ui-layer">
+        <div class="panel sidebar">
+            <div style="font-size: 24px; color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; font-weight: 700;">SENTINEL</div>
+
+            <h3 style="margin-top: 20px;">Time Control</h3>
+            <div class="controls" style="flex-direction: column;">
+                <div style="display: flex; width: 100%; align-items: center; gap: 5px;">
+                    <button class="btn-toggle" id="btn-play" style="width: 40px; text-align: center;" onclick="togglePlay()">⏸</button>
+                    <input type="range" min="0" max="120" value="60" class="slider" id="timeSlider" oninput="updateSpeed(this.value)" style="flex: 1;">
+                    <span id="speed-label" style="font-size: 10px; width: 30px; text-align: right;">60x</span>
+                </div>
+                <!-- Timeline Scrubber -->
+                <div style="width: 100%; display: flex; flex-direction: column; margin-top: 5px;">
+                    <span style="font-size: 10px; color: #88aaff; margin-bottom: 2px;">MISSION TIMELINE</span>
+                    <input type="range" class="slider" id="scrubber" min="0" max="100" step="0.1" style="width: 100%;" oninput="scrubTime(this.value)">
+                </div>
+            </div>
+
+            <h3 style="margin-top: 20px;">Visualization Layers</h3>
+            <div class="controls">
+                <button class="btn-toggle active" onclick="toggleDebris(this)">Toggle Tracked Debris</button>
+                <button class="btn-toggle active" onclick="toggleBackground(this)">Toggle Background Noise</button>
+                <button class="btn-toggle active" onclick="toggleOrbits(this)">Toggle Orbital Paths</button>
+                <div style="display: flex; gap: 5px;">
+                    <button class="btn-toggle" onclick="viewEarth(this)" style="flex:1;">Reset Camera</button>
+                    <button class="btn-toggle" onclick="toggleMode()" style="flex:1;">2D/3D</button>
+                </div>
+            </div>
+
+            <h3 style="margin-top: 20px;">Tracked Assets</h3>
+            <div id="asset-list" class="asset-list">
+                <!-- JS Populated -->
+            </div>
+        </div>
+
+        <div id="info-panel" class="panel">
+            <h3>Telemetry</h3>
+            <div id="static-info">Select an object...</div>
+            <div id="live-telemetry" style="margin-top: 10px; border-top: 1px dashed #445566; padding-top: 5px;"></div>
+        </div>
+    </div>
+
+    <script>
+        let viewer;
+        let debrisEntities = [];
+        let backgroundEntities = [];
+        let assetEntities = [];
+        let startTime, stopTime; // Declare globals
+
+        try {
+            viewer = new Cesium.Viewer('cesiumContainer', {
+                animation: false, // Removed default animation widget
+                timeline: false,  // Removed default timeline bar
+                baseLayerPicker: false,
+                geocoder: false,
+                homeButton: false,
+                sceneModePicker: false,
+                navigationHelpButton: false,
+                shouldAnimate: true,
+                infoBox: false,
+                selectionIndicator: true
+            });
+
+            viewer.scene.globe.enableLighting = true;
+            viewer.scene.globe.nightFadeOutDistance = 10000000.0;
+            viewer.scene.skyBox.show = true;
+            
+            // --- PHOTOREALISTIC EARTH UPGRADE ---
+            viewer.imageryLayers.removeAll();
+            
+            // 1. Base Layer: High-Res ArcGIS Satellite Imagery (Online)
+            // FIX: Use .fromUrl() pattern for Cesium 1.104+
+            Cesium.ArcGisMapServerImageryProvider.fromUrl(
+                'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
+            ).then(function(imageryProvider) {
+                viewer.imageryLayers.addImageryProvider(imageryProvider);
+                
+                // 2. Cloud Layer: Local High-Res Texture (Added ON TOP)
+                const clouds = viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({
+                    url: './earth_clouds_8k.jpg'
+                }));
+                clouds.alpha = 0.35; // Subtle, realistic transparency
+                
+            }).catch(function(error) {
+                console.error("Failed to load ArcGIS imagery (Network Error or Firewall). Reverting to local textures.", error);
+                // Fallback: Local Blue Marble
+                viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({
+                    url: './earth_bluemarble_2km.jpg'
+                }));
+                // Fallback: Clouds
+                const clouds = viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({
+                    url: './earth_clouds_8k.jpg'
+                }));
+                clouds.alpha = 0.35;
+            });
+            
+            // 3. Atmosphere & Lighting Physics
+            viewer.scene.globe.showGroundAtmosphere = true;
+            viewer.scene.globe.dynamicAtmosphereLighting = true;
+            viewer.scene.globe.dynamicAtmosphereLightingFromSun = true;
+            
+            // Realistic Day/Night Terminator
+            viewer.scene.globe.lightingFadeOutDistance = 6500000.0;
+            viewer.scene.globe.lightingFadeInDistance = 9000000.0;
+            
+            // Atmosphere visual tuning
+            viewer.scene.skyAtmosphere.show = true;
+            viewer.scene.skyAtmosphere.hueShift = -0.05; // Slight blue shift
+            viewer.scene.skyAtmosphere.saturationShift = 0.1;
+            viewer.scene.skyAtmosphere.brightnessShift = 0.1;
+            
+            // Post-Processing
+            viewer.scene.highDynamicRange = true;
+            viewer.scene.postProcessStages.fxaa.enabled = true; // Anti-aliasing
+            viewer.scene.fog.density = 0.00015;
+            viewer.scene.fog.screenSpaceErrorFactor = 2.0;
+            
+            Cesium.CzmlDataSource.load('./output.czml').then(function(ds) {
+                viewer.dataSources.add(ds);
+                
+                // Initialize Time Globals
+                const clock = ds.clock;
+                startTime = clock.startTime;
+                stopTime = clock.stopTime;
+                
+                // Sync Viewer Clock
+                viewer.clock.startTime = startTime;
+                viewer.clock.stopTime = stopTime;
+                viewer.clock.currentTime = startTime;
+                viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
+                viewer.clock.multiplier = 60;
+
+                const entities = ds.entities.values;
+                const listContainer = document.getElementById('asset-list');
+
+                entities.forEach(ent => {
+                    if (ent.id.startsWith('deb_')) {
+                        debrisEntities.push(ent);
+                    } else if (ent.id.startsWith('static_deb_')) {
+                         backgroundEntities.push(ent);
+                    } else if (ent.id.includes('_active')) {
+                        assetEntities.push(ent);
+                        
+                        const isManeuvering = ent.description && ent.description.getValue(Cesium.JulianDate.now()).includes('AVOIDANCE');
+                        const statusHtml = isManeuvering ? '<span class="status-warn">⚠ AVOID</span>' : '<span class="status-ok">OK</span>';
+
+                        const div = document.createElement('div');
+                        div.className = 'asset-item';
+                        div.innerHTML = `<span class="asset-name">${ent.name}</span> <span class="asset-status">${statusHtml}</span>`;
+                        div.onclick = () => {
+                            viewer.selectedEntity = ent;
+                            viewer.flyTo(ent, { duration: 1.5, offset: new Cesium.HeadingPitchRange(0, -0.5, 5000000) });
+                        };
+                        listContainer.appendChild(div);
+                    }
+                });
+
+                document.getElementById('loading').style.display = 'none';
+
+            }).catch(err => { console.error(err); });
+
+            // Clock & Scrubber Logic
+            viewer.clock.onTick.addEventListener(function(clock) {
+                // Update Scrubber Position
+                if (startTime && stopTime) {
+                    const totalSeconds = Cesium.JulianDate.secondsDifference(stopTime, startTime);
+                    const currentSeconds = Cesium.JulianDate.secondsDifference(clock.currentTime, startTime);
+                    const percent = (currentSeconds / totalSeconds) * 100;
+                    const scrubber = document.getElementById('scrubber');
+                    if (document.activeElement !== scrubber) { // Don't update if dragging
+                        scrubber.value = percent;
+                    }
+                }
+                
+                // Update Live Telemetry
+                const infoPanel = document.getElementById('info-panel');
+                if (infoPanel.style.display !== 'none' && viewer.selectedEntity && viewer.selectedEntity.position) {
+                    const position = viewer.selectedEntity.position.getValue(clock.currentTime);
+                    if (position) {
+                        const carto = Cesium.Cartographic.fromCartesian(position);
+                        const altKm = (carto.height / 1000).toFixed(1);
+                        const lat = Cesium.Math.toDegrees(carto.latitude).toFixed(2);
+                        const lon = Cesium.Math.toDegrees(carto.longitude).toFixed(2);
+                        
+                        const html = `
+                            <table style="width: 100%; font-family: 'Roboto Mono', monospace; font-size: 12px; color: #00f2ff;">
+                                <tr><td style="color: #88aaff;">ALTITUDE</td><td style="text-align: right;">${altKm} km</td></tr>
+                                <tr><td style="color: #88aaff;">LATITUDE</td><td style="text-align: right;">${lat}°</td></tr>
+                                <tr><td style="color: #88aaff;">LONGITUDE</td><td style="text-align: right;">${lon}°</td></tr>
+                            </table>
+                        `;
+                        document.getElementById('live-telemetry').innerHTML = html;
+                    }
+                }
+            });
+            
+            // --- SMOOTH CAMERA CONTROLS (TRACKPAD OPTIMIZED) ---
+            viewer.scene.screenSpaceCameraController.inertiaSpin = 0.3;
+            viewer.scene.screenSpaceCameraController.inertiaZoom = 0.3;
+            viewer.scene.screenSpaceCameraController.inertiaTranslate = 0.3;
+            viewer.scene.screenSpaceCameraController.zoomEventTypes = [Cesium.CameraEventType.WHEEL, Cesium.CameraEventType.PINCH];
+            viewer.scene.screenSpaceCameraController.zoomFactor = 0.4;
+            viewer.scene.screenSpaceCameraController.minimumZoomDistance = 50000;
+            viewer.scene.screenSpaceCameraController.tiltEventTypes = [Cesium.CameraEventType.RIGHT_DRAG, Cesium.CameraEventType.PINCH, {
+                eventType: Cesium.CameraEventType.LEFT_DRAG,
+                modifier: Cesium.KeyboardEventModifier.CTRL
+            }];
+
+            viewer.selectedEntityChanged.addEventListener(function(selectedEntity) {
+                const infoPanel = document.getElementById('info-panel');
+                const staticInfo = document.getElementById('static-info');
+                const liveInfo = document.getElementById('live-telemetry');
+                
+                if (Cesium.defined(selectedEntity)) {
+                    const id = selectedEntity.id;
+                    // Whitelist: Active Satellites, Real Debris, Asteroid
+                    const isTarget = id.includes('_active') || (id.startsWith('deb_') && !id.startsWith('static_')) || id === 'apophis_99942';
+                    
+                    if (!isTarget) {
+                        viewer.selectedEntity = undefined;
+                        return;
+                    }
+
+                    infoPanel.style.display = 'block';
+                    
+                    if (selectedEntity.description) {
+                        const desc = selectedEntity.description.getValue(viewer.clock.currentTime);
+                        staticInfo.innerHTML = desc;
+                    } else {
+                        // Debris / Asteroid Fallback
+                        staticInfo.innerHTML = `
+                            <div style="font-family: 'Roboto Mono', monospace; font-size: 12px; text-align: left; color: #e0e0e0;">
+                                <h3 style="margin: 0 0 5px 0; color: #ff3333; border-bottom: 1px solid #ff3333; padding-bottom: 3px;">${selectedEntity.name || 'UNKNOWN OBJECT'}</h3>
+                                <div style="background: rgba(40, 10, 10, 0.5); padding: 5px; border: 1px solid #553333; text-align: center;">
+                                    ⚠ UNCLASSIFIED DEBRIS
+                                </div>
+                            </div>`;
+                    }
+                    liveInfo.innerHTML = '<div style="color:#667788;">Acquiring Signal...</div>';
+                } else {
+                    infoPanel.style.display = 'none';
+                }
+            });
+
+        } catch (e) { console.error(e); }
+
+        // --- CONTROLS ---
+        function scrubTime(val) {
+            if (startTime && stopTime) {
+                const totalSeconds = Cesium.JulianDate.secondsDifference(stopTime, startTime);
+                const offset = totalSeconds * (val / 100.0);
+                const newTime = Cesium.JulianDate.addSeconds(startTime, offset, new Cesium.JulianDate());
+                viewer.clock.currentTime = newTime;
+            }
+        }
+        
+        function toggleMode() {
+            if (viewer.scene.mode === Cesium.SceneMode.SCENE3D) {
+                viewer.scene.morphTo2D();
+            } else {
+                viewer.scene.morphTo3D();
+            }
+        }
+
+        function toggleDebris(btn) {
+            btn.classList.toggle('active');
+            const show = btn.classList.contains('active');
+            debrisEntities.forEach(e => e.show = show);
+        }
+
+        function toggleBackground(btn) {
+            btn.classList.toggle('active');
+            const show = btn.classList.contains('active');
+            backgroundEntities.forEach(e => e.show = show);
+        }
+
+        function toggleOrbits(btn) {
+            btn.classList.toggle('active');
+            const show = btn.classList.contains('active');
+            assetEntities.forEach(e => { if(e.path) e.path.show = show; });
+        }
+
+        function viewEarth() {
+            viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(0, 0, 20000000) });
+        }
+        
+        function togglePlay() {
+            const btn = document.getElementById('btn-play');
+            if (viewer.clock.shouldAnimate) {
+                viewer.clock.shouldAnimate = false;
+                btn.innerText = "▶";
+            } else {
+                viewer.clock.shouldAnimate = true;
+                btn.innerText = "⏸";
+            }
+        }
+        
+        function updateSpeed(val) {
+            viewer.clock.multiplier = Number(val);
+            document.getElementById('speed-label').innerText = val + "x";
+        }
+
+    </script>
+</body>
+</html>

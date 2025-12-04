@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Generated Data
+*.czml
+output.czml
+
+# Documentation & Submission Artifacts
+HACKATHON_SUBMISSION.md
+PROJECT_REPORT.md
+*.mp4
+WhatsApp Video*
+
+# OS specific
+.DS_Store
+Thumbs.db
