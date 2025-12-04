@@ -1,0 +1,6 @@
+flask
+skyfield
+poliastro
+numpy
+astropy
+gunicorn
