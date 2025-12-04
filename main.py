@@ -12,7 +12,7 @@ from poliastro.maneuver import Maneuver
 # --- CONFIGURATION ---
 SCENARIO_NAME = "SENTINEL: DEEP SPACE MONITOR"
 DURATION_HOURS = 24
-STEP_MINUTES = 2
+STEP_MINUTES = 5  # Increased step size for performance
 COLLISION_THRESHOLD_KM = 200.0
 MANEUVER_LEAD_TIME_MIN = 45
 
@@ -49,9 +49,6 @@ def load_data():
                 sat = load.tle_file(f"{asset['id']}.tle")[0]
             except:
                 sat = load.tle_file(get_url(asset['catnr']), filename=f"{asset['id']}.tle")[0]
-            # Note: We store a mutable dictionary for maneuver/collisions, 
-            # but for a fresh simulation we need to reset those fields.
-            # So we store just the static data here.
             fleet.append({'data': asset, 'sat': sat})
         except Exception as e:
             print(f"    ! Failed to load {asset['name']}: {e}")
@@ -61,8 +58,9 @@ def load_data():
         debris_iridium = load.tle_file('debris_iridium.tle')
         debris_cosmos = load.tle_file('debris_cosmos.tle')
         real_debris = debris_iridium + debris_cosmos
-        if len(real_debris) > 1200:
-            real_debris = random.sample(real_debris, 1200)
+        # OPTIMIZATION: Limit debris to 500 for free tier CPU limits
+        if len(real_debris) > 500:
+            real_debris = random.sample(real_debris, 500)
     except Exception as e:
         print("    ! Using synthetic debris fallback.")
         real_debris = []
@@ -79,7 +77,6 @@ def get_czml():
     
     print(f"    > Tracking {len(static_fleet)} Assets vs {len(real_debris)} Debris Objects.")
 
-    # Create a fresh fleet list for this simulation run so we don't persist maneuvers across refreshes
     fleet = []
     for item in static_fleet:
         fleet.append({
@@ -105,7 +102,8 @@ def get_czml():
         
         detected_risk = None
         
-        for t_idx in range(0, len(times), 5):
+        # OPTIMIZATION: Check fewer time steps for collisions (every 10th step instead of 5th)
+        for t_idx in range(0, len(times), 10):
             t = times[t_idx]
             my_pos = sat.at(t).position.km
             

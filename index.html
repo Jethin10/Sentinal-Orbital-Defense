@@ -277,49 +277,70 @@
             viewer.scene.fog.density = 0.00015;
             viewer.scene.fog.screenSpaceErrorFactor = 2.0;
             
-            Cesium.CzmlDataSource.load('./output.czml').then(function(ds) {
-                viewer.dataSources.add(ds);
-                
-                // Initialize Time Globals
-                const clock = ds.clock;
-                startTime = clock.startTime;
-                stopTime = clock.stopTime;
-                
-                // Sync Viewer Clock
-                viewer.clock.startTime = startTime;
-                viewer.clock.stopTime = stopTime;
-                viewer.clock.currentTime = startTime;
-                viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
-                viewer.clock.multiplier = 60;
+            function loadData() {
+                fetch('./output.czml')
+                    .then(response => {
+                        if (response.status === 503) {
+                            document.querySelector('.loading-text').innerText = "CALCULATING ORBITAL TRAJECTORIES...";
+                            setTimeout(loadData, 5000); // Retry in 5 seconds
+                            return null;
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (!data) return; // Waiting for retry
 
-                const entities = ds.entities.values;
-                const listContainer = document.getElementById('asset-list');
+                        Cesium.CzmlDataSource.load(data).then(function(ds) {
+                            viewer.dataSources.add(ds);
+                            
+                            // Initialize Time Globals
+                            const clock = ds.clock;
+                            startTime = clock.startTime;
+                            stopTime = clock.stopTime;
+                            
+                            // Sync Viewer Clock
+                            viewer.clock.startTime = startTime;
+                            viewer.clock.stopTime = stopTime;
+                            viewer.clock.currentTime = startTime;
+                            viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
+                            viewer.clock.multiplier = 60;
 
-                entities.forEach(ent => {
-                    if (ent.id.startsWith('deb_')) {
-                        debrisEntities.push(ent);
-                    } else if (ent.id.startsWith('static_deb_')) {
-                         backgroundEntities.push(ent);
-                    } else if (ent.id.includes('_active')) {
-                        assetEntities.push(ent);
-                        
-                        const isManeuvering = ent.description && ent.description.getValue(Cesium.JulianDate.now()).includes('AVOIDANCE');
-                        const statusHtml = isManeuvering ? '<span class="status-warn">⚠ AVOID</span>' : '<span class="status-ok">OK</span>';
+                            const entities = ds.entities.values;
+                            const listContainer = document.getElementById('asset-list');
 
-                        const div = document.createElement('div');
-                        div.className = 'asset-item';
-                        div.innerHTML = `<span class="asset-name">${ent.name}</span> <span class="asset-status">${statusHtml}</span>`;
-                        div.onclick = () => {
-                            viewer.selectedEntity = ent;
-                            viewer.flyTo(ent, { duration: 1.5, offset: new Cesium.HeadingPitchRange(0, -0.5, 5000000) });
-                        };
-                        listContainer.appendChild(div);
-                    }
-                });
+                            entities.forEach(ent => {
+                                if (ent.id.startsWith('deb_')) {
+                                    debrisEntities.push(ent);
+                                } else if (ent.id.startsWith('static_deb_')) {
+                                     backgroundEntities.push(ent);
+                                } else if (ent.id.includes('_active')) {
+                                    assetEntities.push(ent);
+                                    
+                                    const isManeuvering = ent.description && ent.description.getValue(Cesium.JulianDate.now()).includes('AVOIDANCE');
+                                    const statusHtml = isManeuvering ? '<span class="status-warn">⚠ AVOID</span>' : '<span class="status-ok">OK</span>';
 
-                document.getElementById('loading').style.display = 'none';
+                                    const div = document.createElement('div');
+                                    div.className = 'asset-item';
+                                    div.innerHTML = `<span class="asset-name">${ent.name}</span> <span class="asset-status">${statusHtml}</span>`;
+                                    div.onclick = () => {
+                                        viewer.selectedEntity = ent;
+                                        viewer.flyTo(ent, { duration: 1.5, offset: new Cesium.HeadingPitchRange(0, -0.5, 5000000) });
+                                    };
+                                    listContainer.appendChild(div);
+                                }
+                            });
 
-            }).catch(err => { console.error(err); });
+                            document.getElementById('loading').style.display = 'none';
+
+                        }).catch(err => { console.error(err); });
+                    })
+                    .catch(err => {
+                        console.error("Network Error, retrying...", err);
+                        setTimeout(loadData, 5000);
+                    });
+            }
+
+            loadData(); // Start the loading process
 
             // Clock & Scrubber Logic
             viewer.clock.onTick.addEventListener(function(clock) {
